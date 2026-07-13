@@ -102,7 +102,7 @@ app.post('/api/test-now', async (req, res) => {
   })
 })
 
-// Run tests against Baby Analyzer
+// Run tests against Baby Analyzer (via HTTP API)
 async function runTests() {
   testStatus = 'running'
   lastTestRun = Date.now()
@@ -126,7 +126,7 @@ async function runTests() {
     try {
       const response = await axios.post(BABY_ANALYZER_URL, prop, { timeout: 10000 })
 
-      if (response.data.success) {
+      if (response.data?.success) {
         results.properties.push({
           name: prop.name,
           address: prop.address,
@@ -137,7 +137,7 @@ async function runTests() {
           timestamp: new Date().toISOString()
         })
         results.summary.passed++
-      } else {
+      } else if (response.data?.error) {
         results.properties.push({
           name: prop.name,
           address: prop.address,
@@ -147,6 +147,8 @@ async function runTests() {
         })
         results.summary.failed++
         results.summary.errors.push(`${prop.name}: ${response.data.error}`)
+      } else {
+        throw new Error('Invalid response format')
       }
     } catch (error) {
       results.properties.push({
