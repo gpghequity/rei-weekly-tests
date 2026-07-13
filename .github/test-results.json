@@ -1,0 +1,23 @@
+[
+  {
+    "timestamp": "2026-07-13T01:00:00.000Z",
+    "duration": 0,
+    "properties": [
+      {
+        "name": "Commercial Storage",
+        "address": "123 Main St, Lancaster PA 17601",
+        "status": "PASS",
+        "bibleNoi": 130000,
+        "scenarios": 8,
+        "sections": 12,
+        "timestamp": "2026-07-13T01:00:15.234Z"
+      }
+    ],
+    "summary": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "errors": []
+    }
+  }
+]

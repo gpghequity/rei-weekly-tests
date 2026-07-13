@@ -65,52 +65,36 @@ jobs:
           })();
           " >> $GITHUB_OUTPUT
 
-      - name: Post results to Google Sheets
+      - name: Save results to file
         if: always()
-        env:
-          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
-          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
           node -e "
-          const { google } = require('googleapis');
+          const fs = require('fs');
           const results = JSON.parse(process.env.TEST_RESULTS || '{}');
 
-          if (!process.env.GOOGLE_SERVICE_ACCOUNT) {
-            console.log('Sheets auth not configured. Results:');
-            console.log(JSON.stringify(results, null, 2));
-            process.exit(0);
-          }
+          // Load existing results
+          let history = [];
+          try {
+            history = JSON.parse(fs.readFileSync('.github/test-results.json', 'utf8'));
+          } catch (e) {}
 
-          (async () => {
-            const auth = new google.auth.GoogleAuth({
-              credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-              scopes: ['https://www.googleapis.com/auth/spreadsheets']
-            });
+          // Add new result to history (keep last 52)
+          history.push(results);
+          if (history.length > 52) history = history.slice(-52);
 
-            const sheets = google.sheets({ version: 'v4', auth });
-            const sheetId = process.env.GOOGLE_SHEETS_ID;
-
-            const row = [
-              new Date().toISOString(),
-              results.summary.passed,
-              results.summary.failed,
-              results.summary.total,
-              results.properties.map(p => p.name + ':' + p.status).join(' | ')
-            ];
-
-            await sheets.spreadsheets.values.append({
-              spreadsheetId: sheetId,
-              range: 'Weekly Test Results!A:E',
-              valueInputOption: 'RAW',
-              resource: { values: [row] }
-            });
-
-            console.log('✅ Results posted to Sheets');
-          })().catch(e => {
-            console.error('Sheets error:', e.message);
-            process.exit(0);
-          });
+          // Write back
+          fs.writeFileSync('.github/test-results.json', JSON.stringify(history, null, 2));
+          console.log('✅ Results saved to .github/test-results.json');
           "
+
+      - name: Commit results
+        if: always()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .github/test-results.json
+          git commit -m "test: weekly baby analyzer results $(date +%Y-%m-%d)" || true
+          git push
 
       - name: Report status
         if: always()

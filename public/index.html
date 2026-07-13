@@ -129,59 +129,62 @@
   </div>
 
   <script>
-    // This would be populated by the GitHub Actions workflow posting to Sheets
-    // For now, show placeholder
-    fetch('/api/results')
-      .then(r => r.json())
-      .catch(() => ({
-        latest: new Date().toLocaleDateString(),
-        passed: '-',
-        failed: '-',
-        results: []
-      }))
-      .then(data => {
-        document.getElementById('latest').textContent = data.latest || 'Never';
-        document.getElementById('passed').textContent = data.passed ?? '-';
-        document.getElementById('failed').textContent = data.failed ?? '-';
+    // Fetch test results from GitHub Actions workflow
+    const RESULTS_URL = 'https://raw.githubusercontent.com/gpghequity/rei-weekly-tests/main/.github/test-results.json';
 
-        if (data.passed !== undefined && data.total !== undefined) {
-          const rate = Math.round((data.passed / data.total) * 100);
-          document.getElementById('rate').textContent = rate + '%';
+    fetch(RESULTS_URL)
+      .then(r => r.ok ? r.json() : Promise.reject('Failed to load results'))
+      .then(results => {
+        if (!results || results.length === 0) {
+          throw new Error('No results available');
         }
 
-        if (data.results && data.results.length > 0) {
-          const html = `
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Passed</th>
-                  <th>Failed</th>
-                  <th>Total</th>
-                  <th>Properties</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${data.results.map(r => `
+        // Most recent result
+        const latest = results[results.length - 1];
+        const date = new Date(latest.timestamp);
+
+        document.getElementById('latest').textContent = date.toLocaleDateString();
+        document.getElementById('passed').textContent = latest.summary.passed;
+        document.getElementById('failed').textContent = latest.summary.failed;
+
+        const rate = Math.round((latest.summary.passed / latest.summary.total) * 100);
+        document.getElementById('rate').textContent = rate + '%';
+
+        // Build results table (last 10)
+        const html = `
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Passed</th>
+                <th>Failed</th>
+                <th>Total</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${results.slice().reverse().slice(0, 10).map((r, i) => {
+                const d = new Date(r.timestamp);
+                const status = r.summary.failed === 0 ? '✅ PASS' : '❌ FAIL';
+                return `
                   <tr>
-                    <td>${new Date(r.timestamp).toLocaleDateString()}</td>
-                    <td><strong>${r.passed}</strong></td>
-                    <td>${r.failed}</td>
-                    <td>${r.total}</td>
-                    <td>${r.properties || '-'}</td>
+                    <td>${d.toLocaleDateString()} ${d.toLocaleTimeString()}</td>
+                    <td><strong>${r.summary.passed}</strong></td>
+                    <td>${r.summary.failed}</td>
+                    <td>${r.summary.total}</td>
+                    <td>${status}</td>
                   </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          `;
-          document.getElementById('results').innerHTML = html;
-        } else {
-          document.getElementById('results').innerHTML = '<p style="text-align:center; color: #999;">No test results yet. Tests run Monday 1AM UTC.</p>';
-        }
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+
+        document.getElementById('results').innerHTML = html;
       })
       .catch(e => {
-        document.getElementById('error').textContent = 'Error loading results: ' + e.message;
-        document.getElementById('error').style.display = 'block';
+        console.error('Error:', e);
+        document.getElementById('results').innerHTML = '<p style="text-align:center; color: #999;">Loading test results... (Tests run Monday 1AM UTC)</p>';
       });
   </script>
 </body>
