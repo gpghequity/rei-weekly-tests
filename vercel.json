@@ -1,4 +1,5 @@
 {
-  "buildCommand": "npm install",
-  "startCommand": "npm start"
+  "buildCommand": "mkdir -p .vercel/output/static && cp public/* .vercel/output/static/ 2>/dev/null || true",
+  "framework": "nodejs",
+  "outputDirectory": ".vercel/output/static"
 }
