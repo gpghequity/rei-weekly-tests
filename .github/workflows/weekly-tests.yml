@@ -1,0 +1,119 @@
+name: Weekly Baby Analyzer Tests
+
+on:
+  schedule:
+    # Monday 1:00 AM UTC
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Baby Analyzer tests
+        id: tests
+        run: |
+          node -e "
+          const axios = require('axios');
+
+          const properties = [
+            { name: 'Commercial Storage', data: { address: '123 Main St, Lancaster PA 17601', assetType: 'commercial', askingPrice: 700000, grossIncome: 200000, sellerExpenses: 80000 } },
+            { name: 'Residential SFR', data: { address: '456 Oak Ave, Philadelphia PA 19103', assetType: 'residential', askingPrice: 450000, grossIncome: 42000 } },
+            { name: 'Mobile Home Park', data: { address: '789 Park Ln, Greenville SC 29601', assetType: 'mhp', askingPrice: 2500000, grossIncome: 420000, sellerExpenses: 140000 } },
+            { name: 'Storage Facility', data: { address: '321 Storage Way, Denver CO 80202', assetType: 'storage', askingPrice: 1200000, grossIncome: 180000, sellerExpenses: 60000 } },
+            { name: 'Development Land', data: { address: '654 Lot Blvd, Austin TX 78701', assetType: 'land', askingPrice: 3000000, grossIncome: 150000 } }
+          ];
+
+          (async () => {
+            const results = {
+              timestamp: new Date().toISOString(),
+              properties: [],
+              summary: { total: properties.length, passed: 0, failed: 0 }
+            };
+
+            for (const prop of properties) {
+              try {
+                const response = await axios.post('https://rei-baby-analyzer-production.up.railway.app/api/analyze', prop.data, { timeout: 15000 });
+                if (response.data?.success) {
+                  results.properties.push({ name: prop.name, status: 'PASS', noi: response.data.bibleNoi, scenarios: response.data.scenarios?.length });
+                  results.summary.passed++;
+                } else {
+                  results.properties.push({ name: prop.name, status: 'FAIL', error: response.data?.error });
+                  results.summary.failed++;
+                }
+              } catch (e) {
+                results.properties.push({ name: prop.name, status: 'ERROR', error: e.message });
+                results.summary.failed++;
+              }
+            }
+
+            console.log(JSON.stringify(results, null, 2));
+            process.stdout.write('TEST_RESULTS=' + JSON.stringify(results));
+          })();
+          " >> $GITHUB_OUTPUT
+
+      - name: Post results to Google Sheets
+        if: always()
+        env:
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          node -e "
+          const { google } = require('googleapis');
+          const results = JSON.parse(process.env.TEST_RESULTS || '{}');
+
+          if (!process.env.GOOGLE_SERVICE_ACCOUNT) {
+            console.log('Sheets auth not configured. Results:');
+            console.log(JSON.stringify(results, null, 2));
+            process.exit(0);
+          }
+
+          (async () => {
+            const auth = new google.auth.GoogleAuth({
+              credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+              scopes: ['https://www.googleapis.com/auth/spreadsheets']
+            });
+
+            const sheets = google.sheets({ version: 'v4', auth });
+            const sheetId = process.env.GOOGLE_SHEETS_ID;
+
+            const row = [
+              new Date().toISOString(),
+              results.summary.passed,
+              results.summary.failed,
+              results.summary.total,
+              results.properties.map(p => p.name + ':' + p.status).join(' | ')
+            ];
+
+            await sheets.spreadsheets.values.append({
+              spreadsheetId: sheetId,
+              range: 'Weekly Test Results!A:E',
+              valueInputOption: 'RAW',
+              resource: { values: [row] }
+            });
+
+            console.log('✅ Results posted to Sheets');
+          })().catch(e => {
+            console.error('Sheets error:', e.message);
+            process.exit(0);
+          });
+          "
+
+      - name: Report status
+        if: always()
+        run: |
+          echo "Test run completed at $(date)"
+          echo "Results will be available in Google Sheets"
