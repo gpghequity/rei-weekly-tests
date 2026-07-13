@@ -1,5 +1,4 @@
 {
   "framework": "node",
-  "buildCommand": "npm install",
-  "startCommand": "npm start"
+  "buildCommand": "npm install"
 }
