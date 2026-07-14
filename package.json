@@ -5,8 +5,8 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "dev": "NODE_ENV=development node index.js"
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js"
   },
   "keywords": [],
   "author": "",

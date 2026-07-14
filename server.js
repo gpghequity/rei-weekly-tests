@@ -12,7 +12,10 @@ const PORT = process.env.PORT || 3000
 
 app.use(cors())
 app.use(express.json())
-app.use(express.static('public'))
+// index: false so the rich in-process dashboard route below (with live
+// "Run Tests Now" + real /api/results) handles GET '/' instead of being
+// shadowed by public/index.html
+app.use(express.static('public', { index: false }))
 
 // In-memory test results
 let testResults = []
